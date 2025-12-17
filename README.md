@@ -47,7 +47,7 @@ The flexible parser can handle most Indian bank statement formats with common co
 ```bash
 # Get the app
 cd frappe-bench
-bench get-app https://github.com/yourusername/bank_statement_import.git
+bench get-app https://github.com/miteshnandu/bank_statement_import.git
 
 # Install on your site
 bench --site your-site-name install-app bank_statement_import
@@ -173,7 +173,7 @@ AGPL-3.0
 
 ## Support
 
-For issues and feature requests, please use [GitHub Issues](https://github.com/yourusername/bank_statement_import/issues).
+For issues and feature requests, please use [GitHub Issues](https://github.com/miteshnandu/bank_statement_import/issues).
 
 ## Credits
 
