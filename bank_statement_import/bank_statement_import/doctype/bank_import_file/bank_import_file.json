@@ -1,0 +1,156 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:BNK-IMP-{####}",
+ "creation": "2025-11-28 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "file",
+  "bank_account",
+  "column_break_1",
+  "status",
+  "mapping_template",
+  "company",
+  "section_break_1",
+  "total_rows",
+  "applied_rows",
+  "failed_rows",
+  "ignored_rows",
+  "section_break_2",
+  "column_mapping",
+  "section_break_3",
+  "bank_import_rows"
+ ],
+ "fields": [
+  {
+   "fieldname": "file",
+   "fieldtype": "Attach",
+   "in_list_view": 1,
+   "label": "Bank Statement File",
+   "reqd": 0
+  },
+  {
+   "fieldname": "bank_account",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Bank Account",
+   "options": "Account",
+   "reqd": 1
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Draft\nParsed\nPartially Applied\nApplied\nFailed"
+  },
+  {
+   "fieldname": "mapping_template",
+   "fieldtype": "Link",
+   "label": "Mapping Template",
+   "options": "Bank Import Mapping"
+  },
+  {
+   "fieldname": "bank_import_rows",
+   "fieldtype": "Table",
+   "label": "Bank Import Rows",
+   "options": "Bank Import Row"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break",
+   "label": "Statistics"
+  },
+  {
+   "fieldname": "section_break_2",
+   "fieldtype": "Section Break",
+   "label": "Column Mapping"
+  },
+  {
+   "fieldname": "section_break_3",
+   "fieldtype": "Section Break",
+   "label": "Imported Rows"
+  },
+  {
+   "fieldname": "total_rows",
+   "fieldtype": "Int",
+   "label": "Total Rows",
+   "read_only": 1
+  },
+  {
+   "fieldname": "applied_rows",
+   "fieldtype": "Int",
+   "label": "Applied Rows",
+   "read_only": 1
+  },
+  {
+   "fieldname": "failed_rows",
+   "fieldtype": "Int",
+   "label": "Failed Rows",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ignored_rows",
+   "fieldtype": "Int",
+   "label": "Ignored Rows",
+   "read_only": 1
+  },
+  {
+   "description": "JSON mapping of Excel columns to fields",
+   "fieldname": "column_mapping",
+   "fieldtype": "Long Text",
+   "label": "Column Mapping"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-11-28 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Bank Statement Import",
+ "name": "Bank Import File",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
