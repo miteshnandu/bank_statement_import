@@ -255,8 +255,11 @@ def parse_row(row_data, row_no):
 		reference = find_text_value(row_dict, ["reference", "ref", "ref_no", "refno", "transaction_id", "txn_id", "utr", "utr_no"])
 		
 		# If no separate reference, use cheque_no as reference
+		# If still no reference, use narration/particulars as reference (for IDFC and other banks)
 		if not reference and cheque_no:
 			reference = cheque_no
+		if not reference and narration:
+			reference = narration
 		
 		# Skip rows without essential data - but log why
 		if not posting_date:
@@ -623,12 +626,19 @@ def create_internal_transfer(row, import_doc, matched_mapping, mapping_config, s
 	pe.paid_amount = flt(row.amount)
 	pe.received_amount = flt(row.amount)
 	# Ensure reference_no is never empty
-	ref_no = row.cheque_no or row.reference or row.narration
-	if not ref_no or ref_no.strip() == "":
+	# Check each field explicitly for empty strings
+	ref_no = None
+	for field in [row.reference, row.cheque_no, row.narration]:
+		if field and str(field).strip():
+			ref_no = str(field).strip()
+			break
+	
+	if not ref_no:
 		ref_no = f"BANK-TRANSFER-{row.row_no}"
+	
 	pe.reference_no = ref_no[:140]
-	pe.reference_date = row.posting_date or frappe.utils.today()
-	pe.remarks = row.narration or "Bank to Cash Transfer"
+	pe.reference_date = row.posting_date if row.posting_date else frappe.utils.today()
+	pe.remarks = row.narration if row.narration else "Bank to Cash Transfer"
 	
 	# Set custom field for duplicate prevention
 	pe.bank_import_reference = f"{row.reference}|{abs(flt(row.amount))}|{row.posting_date}"
@@ -757,13 +767,20 @@ def create_payment_entry(row, import_doc, matched_mapping, mapping_config, serie
 	pe.received_amount = flt(row.amount)
 	
 	# Use narration as reference details (cheque details)
-	# Ensure reference_no is never empty - truncate narration if too long
-	ref_no = row.narration or row.cheque_no or row.reference
-	if not ref_no or ref_no.strip() == "":
+	# Priority: reference > cheque_no > narration > fallback
+	# Check each field explicitly for empty strings
+	ref_no = None
+	for field in [row.reference, row.cheque_no, row.narration]:
+		if field and str(field).strip():
+			ref_no = str(field).strip()
+			break
+	
+	if not ref_no:
 		ref_no = f"BANK-{row.row_no}"
+	
 	pe.reference_no = ref_no[:140]  # Limit length for field
-	pe.reference_date = row.posting_date or frappe.utils.today()
-	pe.remarks = row.narration or "Bank Import"
+	pe.reference_date = row.posting_date if row.posting_date else frappe.utils.today()
+	pe.remarks = row.narration if row.narration else "Bank Import"
 	
 	# Set cost center if provided from UI
 	if mapping_config.get("cost_center"):
@@ -834,12 +851,19 @@ def create_journal_entry(row, import_doc, matched_mapping, mapping_config, serie
 	je.company = import_doc.company
 	je.posting_date = row.posting_date
 	# Ensure cheque_no is never empty for bank transactions
-	cheque_ref = row.narration or row.reference or row.cheque_no
-	if not cheque_ref or cheque_ref.strip() == "":
+	# Check each field explicitly for empty strings
+	cheque_ref = None
+	for field in [row.reference, row.narration, row.cheque_no]:
+		if field and str(field).strip():
+			cheque_ref = str(field).strip()
+			break
+	
+	if not cheque_ref:
 		cheque_ref = f"BANK-JE-{row.row_no}"
+	
 	je.cheque_no = cheque_ref[:140]  # Limit length
-	je.cheque_date = row.posting_date or frappe.utils.today()
-	je.user_remark = row.narration or "Bank Import"
+	je.cheque_date = row.posting_date if row.posting_date else frappe.utils.today()
+	je.user_remark = row.narration if row.narration else "Bank Import"
 	
 	# Add accounts
 	if row.dr_cr_flag == "Dr":
