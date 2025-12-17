@@ -622,8 +622,12 @@ def create_internal_transfer(row, import_doc, matched_mapping, mapping_config, s
 	pe.paid_to = cash_account
 	pe.paid_amount = flt(row.amount)
 	pe.received_amount = flt(row.amount)
-	pe.reference_no = row.cheque_no or row.reference
-	pe.reference_date = row.posting_date
+	# Ensure reference_no is never empty
+	ref_no = row.cheque_no or row.reference or row.narration
+	if not ref_no or ref_no.strip() == "":
+		ref_no = f"BANK-TRANSFER-{row.row_no}"
+	pe.reference_no = ref_no[:140]
+	pe.reference_date = row.posting_date or frappe.utils.today()
 	pe.remarks = row.narration or "Bank to Cash Transfer"
 	
 	# Set custom field for duplicate prevention
@@ -753,7 +757,11 @@ def create_payment_entry(row, import_doc, matched_mapping, mapping_config, serie
 	pe.received_amount = flt(row.amount)
 	
 	# Use narration as reference details (cheque details)
-	pe.reference_no = row.narration or row.cheque_no or row.reference or f"BANK-{row.row_no}"
+	# Ensure reference_no is never empty - truncate narration if too long
+	ref_no = row.narration or row.cheque_no or row.reference
+	if not ref_no or ref_no.strip() == "":
+		ref_no = f"BANK-{row.row_no}"
+	pe.reference_no = ref_no[:140]  # Limit length for field
 	pe.reference_date = row.posting_date or frappe.utils.today()
 	pe.remarks = row.narration or "Bank Import"
 	
@@ -825,7 +833,11 @@ def create_journal_entry(row, import_doc, matched_mapping, mapping_config, serie
 	je.voucher_type = "Bank Entry"
 	je.company = import_doc.company
 	je.posting_date = row.posting_date
-	je.cheque_no = row.narration or row.reference or ""
+	# Ensure cheque_no is never empty for bank transactions
+	cheque_ref = row.narration or row.reference or row.cheque_no
+	if not cheque_ref or cheque_ref.strip() == "":
+		cheque_ref = f"BANK-JE-{row.row_no}"
+	je.cheque_no = cheque_ref[:140]  # Limit length
 	je.cheque_date = row.posting_date or frappe.utils.today()
 	je.user_remark = row.narration or "Bank Import"
 	
