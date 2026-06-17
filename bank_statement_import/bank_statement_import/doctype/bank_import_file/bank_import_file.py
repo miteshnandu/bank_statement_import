@@ -59,7 +59,8 @@ def parse_preview(file_url, bank_account, company, mapping_template=None):
 			frappe.throw("No valid rows found in the uploaded file")
 		
 		# Get suggested column mapping
-		df = pd.read_excel(file_path)
+		# Read as strings to handle Indian date formats correctly
+		df = pd.read_excel(file_path, dtype=str)
 		suggested_mapping = suggest_column_mapping(df)
 		
 		# Load mapping rules if template provided
@@ -151,7 +152,8 @@ def parse_bank_sheet(file_path, sheet=0):
 	"""
 	try:
 		# Read Excel file - first pass to detect header
-		df = pd.read_excel(file_path, sheet_name=sheet, header=None)
+		# Force reading as strings to prevent pandas/Excel from misinterpreting dates
+		df = pd.read_excel(file_path, sheet_name=sheet, header=None, dtype=str)
 		
 		# Detect header row - look for common keywords
 		header_keywords = ["transaction", "date", "narration", "amount", "ref", "cheque", "particulars", "description", "sl"]
@@ -164,7 +166,8 @@ def parse_bank_sheet(file_path, sheet=0):
 				break
 		
 		# Re-read with detected header
-		df = pd.read_excel(file_path, sheet_name=sheet, header=header_row_idx)
+		# Force reading as strings to prevent pandas/Excel from misinterpreting dates
+		df = pd.read_excel(file_path, sheet_name=sheet, header=header_row_idx, dtype=str)
 		
 		# Normalize column names
 		df.columns = [normalize_column_name(col) for col in df.columns]
@@ -172,8 +175,17 @@ def parse_bank_sheet(file_path, sheet=0):
 		# Remove empty rows
 		df = df.dropna(how="all")
 		
-		# Remove rows where all values are strings (likely headers or totals)
-		df = df[~df.apply(lambda row: all(isinstance(val, str) for val in row if pd.notna(val)), axis=1)]
+		# Since we're reading as dtype=str, we can't use isinstance check
+		# Instead, skip rows that look like header repetitions or totals
+		# (rows where multiple cells contain header-like keywords)
+		def is_likely_header_or_total(row):
+			text_cells = [str(val).lower() for val in row if pd.notna(val) and str(val).strip()]
+			header_keywords = ['date', 'transaction', 'narration', 'amount', 'balance', 'total', 'opening', 'closing', 'debit', 'credit']
+			keyword_count = sum(1 for cell in text_cells if any(kw in cell for kw in header_keywords))
+			# If more than 2 cells contain header keywords, it's likely a header row
+			return keyword_count > 2
+		
+		df = df[~df.apply(is_likely_header_or_total, axis=1)]
 		
 		# Parse rows
 		rows = []
@@ -231,19 +243,21 @@ def parse_row(row_data, row_no):
 		value_date = find_date_value(row_dict, ["value_date", "val_date", "valuedate"])
 		
 		# Find amount - check both amount column and separate dr/cr columns
-		amount = find_numeric_value(row_dict, ["amount", "debit", "credit", "withdrawal", "deposit", "txn_amount", "transaction_amount"])
+		# Support plural forms: withdrawals, deposits (for DCB Bank, etc.)
+		amount = find_numeric_value(row_dict, ["amount", "debit", "credit", "withdrawal", "withdrawals", "deposit", "deposits", "txn_amount", "transaction_amount"])
 		
 		# If amount is 0, try to get from debit or credit columns
 		if not amount or amount == 0:
-			debit_amt = find_numeric_value(row_dict, ["debit", "dr", "withdrawal"])
-			credit_amt = find_numeric_value(row_dict, ["credit", "cr", "deposit"])
+			debit_amt = find_numeric_value(row_dict, ["debit", "dr", "withdrawal", "withdrawals"])
+			credit_amt = find_numeric_value(row_dict, ["credit", "cr", "deposit", "deposits"])
 			amount = debit_amt or credit_amt or 0
 		
 		# Determine debit/credit flag
 		dr_cr_flag = determine_dr_cr(row_dict)
 		
 		# Find narration/description
-		narration = find_text_value(row_dict, ["narration", "description", "particulars", "remarks", "details", "transaction_remarks", "desc"])
+		# Support "Transaction Details" (DCB Bank), "Particulars" (IDFC), "Narration" (ICICI/Kotak)
+		narration = find_text_value(row_dict, ["narration", "description", "particulars", "remarks", "details", "transaction_details", "transaction_remarks", "desc"])
 		
 		# Find party name
 		party_name = find_text_value(row_dict, ["party", "party_name", "customer", "vendor", "beneficiary"])
@@ -293,16 +307,45 @@ def find_date_value(row_dict, possible_keys):
 		for col_name, value in row_dict.items():
 			if key in col_name.lower() and pd.notna(value):
 				try:
-					# Try to parse as date
+					# Handle string dates (since we're reading Excel as dtype=str)
+					value_str = str(value).strip()
+					
+					# Skip empty or 'nan' strings
+					if not value_str or value_str.lower() == 'nan':
+						continue
+					
+					# Try to parse as date if it was a datetime object
 					if isinstance(value, datetime):
 						return value.date()
 					
-					# Handle string dates with time (e.g., "01/04/2025 07:34")
-					value_str = str(value).strip()
+					# Handle dates with time (e.g., "01/04/2025 07:34")
 					if ' ' in value_str:
 						value_str = value_str.split(' ')[0]  # Take date part only
 					
-					return getdate(value_str)
+					# Try parsing with dayfirst=True for Indian date format (dd-mm-yyyy or dd/mm/yyyy)
+					# This handles dd-mm-yyyy, dd/mm/yyyy, dd-mm-yy, dd/mm/yy formats
+					try:
+						parsed_date = pd.to_datetime(value_str, dayfirst=True, format='mixed')
+						return parsed_date.date()
+					except:
+						pass
+					
+					# Try explicit date formats common in Indian banks
+					for date_format in ['%d-%m-%Y', '%d/%m/%Y', '%d-%m-%y', '%d/%m/%y', 
+					                     '%d.%m.%Y', '%d.%m.%y', '%Y-%m-%d']:
+						try:
+							parsed_date = datetime.strptime(value_str, date_format)
+							return parsed_date.date()
+						except:
+							continue
+					
+					# Last resort: try pandas with dayfirst again without format parameter
+					try:
+						parsed_date = pd.to_datetime(value_str, dayfirst=True)
+						return parsed_date.date()
+					except:
+						pass
+						
 				except Exception as e:
 					frappe.log_error(f"Date parse error for {value}: {str(e)}", "Bank Import Date Parse")
 					pass
@@ -315,6 +358,12 @@ def find_numeric_value(row_dict, possible_keys):
 		for col_name, value in row_dict.items():
 			if key in col_name.lower() and pd.notna(value):
 				try:
+					# Handle string values (since we're now reading Excel as dtype=str)
+					if isinstance(value, str):
+						# Remove common non-numeric characters but keep decimal point and minus
+						value = value.strip().replace(',', '').replace(' ', '')
+						if not value or value == 'nan':
+							continue
 					return flt(value)
 				except:
 					pass
@@ -326,7 +375,10 @@ def find_text_value(row_dict, possible_keys):
 	for key in possible_keys:
 		for col_name, value in row_dict.items():
 			if key in col_name.lower() and pd.notna(value):
-				return cstr(value).strip()
+				text_val = cstr(value).strip()
+				# Skip if it's a 'nan' string (from dtype=str reading)
+				if text_val and text_val.lower() != 'nan':
+					return text_val
 	return ""
 
 
@@ -347,8 +399,9 @@ def determine_dr_cr(row_dict):
 					return "Dr"
 	
 	# Check if separate debit/credit columns exist
-	debit_val = find_numeric_value(row_dict, ["debit", "withdrawal", "dr"])
-	credit_val = find_numeric_value(row_dict, ["credit", "deposit", "cr"])
+	# Support plural forms: withdrawals, deposits (for DCB Bank, etc.)
+	debit_val = find_numeric_value(row_dict, ["debit", "withdrawal", "withdrawals", "dr"])
+	credit_val = find_numeric_value(row_dict, ["credit", "deposit", "deposits", "cr"])
 	
 	# If both have values, it's an error in the file, but prefer the non-zero one
 	if debit_val and debit_val > 0 and (not credit_val or credit_val == 0):
@@ -531,6 +584,11 @@ def apply_import(import_doc_name, rows_json, mapping_json=None, series_config=No
 					row.status = "Applied"
 					row.applied_doc_type = created_doc.doctype
 					row.applied_doc = created_doc.name
+					# Save and commit BEFORE incrementing success counter
+					# This ensures we don't double-count if save/commit fails
+					import_doc.save()
+					frappe.db.commit()
+					# Only increment success after successful save
 					results["success"] += 1
 					results["created_docs"].append({
 						"doctype": created_doc.doctype,
@@ -547,9 +605,10 @@ def apply_import(import_doc_name, rows_json, mapping_json=None, series_config=No
 				row.error_log = str(e)
 				results["failed"] += 1
 				results["errors"].append({"row": row.row_no, "error": str(e)})
-				frappe.db.rollback()  # Rollback this row only
+				# Don't rollback - document creation errors are already handled
+				# Rollback would undo previous successful rows in the same batch
 		
-		# Save import doc
+		# Final save for any remaining changes
 		import_doc.save()
 		frappe.db.commit()
 		

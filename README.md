@@ -4,7 +4,7 @@ Automate Payment Entry and Journal Entry creation from bank statement Excel file
 
 ## Features
 
-- 📊 **Multi-Bank Support**: Works with ICICI Bank, Kotak Bank, IDFC First Bank, and more
+- 📊 **Multi-Bank Support**: Works with ICICI Bank, Kotak Bank, IDFC First Bank, DCB Bank, and more
 - 🎯 **Smart Detection**: Auto-detects debit/credit transactions
 - 🔄 **Flexible Actions**: Create Payment Entry or Journal Entry
 - 👥 **Party Mapping**: Select Customer/Supplier for each transaction
@@ -27,11 +27,14 @@ Columns: SN, Transaction ID, Transaction Date, Narration, Cheque No, Value Date,
 ### IDFC First Bank
 Columns: Transaction Date, Value Date, Particulars, Cheque No., Debit, Credit, Balance
 
+### DCB Bank
+Columns: Date, Transaction Details, Cheque Number, Withdrawals, Deposits, Balance
+
 ### Other Banks
 The flexible parser can handle most Indian bank statement formats with common columns like:
 - Date/Transaction Date/Posting Date
-- Narration/Description/Particulars
-- Debit/Credit or Dr/Cr columns
+- Narration/Description/Particulars/Transaction Details
+- Debit/Credit or Withdrawals/Deposits or Dr/Cr columns
 - Amount column (for single column format)
 - Cheque No/Reference/UTR
 
